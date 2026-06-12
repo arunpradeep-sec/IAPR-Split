@@ -1,0 +1,283 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>IAPR File Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+body{font-family:Arial;max-width:900px;margin:auto;padding:20px}
+.box{border:1px solid #ccc;border-radius:8px;padding:15px;margin-bottom:15px}
+button{padding:10px 20px;font-size:16px}
+</style>
+</head>
+<body>
+<h2>IAPR File Generator</h2>
+<p style="
+    text-align:left;
+    color:#777;
+    font-size:14px;
+    margin-top:-10px;
+    margin-bottom:25px;
+">
+    Experiment marks + viva, with ZIP export
+</p>
+<p style="
+    text-align:left;
+    color:#777;
+    font-size:11.5px;
+    font-style:italic;
+    margin-top:-10px;
+    margin-bottom:25px;
+">
+    For educational purpose only
+</p>
+<div class="box">
+  <b>Experiment Marks File</b><br><br>
+
+<input type="file"
+       id="expFile"
+       accept=".xlsx,.xls">
+
+<br><br>
+
+ <div style="
+        margin-top:12px;
+        padding:8px;
+        background:#f5f5f5;
+        border-left:4px solid #999;
+        font-size:13px;
+        color:#555;
+        font-style:italic;
+    ">
+        Note: Ensure the Experiment file contains Reg. Number in Column C and
+        Experiment marks in Columns G to P. Remove the last column of the Excel sheet which contains "Last downloaded from this course" before uploading.
+    </div>
+</div>
+
+<div class="box">
+    <b>Viva File</b>
+
+    <br><br>
+
+    <input type="file"
+           id="vivaFile"
+           accept=".xlsx,.xls">
+
+    <div style="
+        margin-top:12px;
+        padding:8px;
+        background:#f5f5f5;
+        border-left:4px solid #999;
+        font-size:13px;
+        color:#555;
+        font-style:italic;
+    ">
+        Note: Ensure the Viva file contains ID Number in Column C and
+        Viva marks for Experiments 1–9 in Columns G to O.Remove the last column of the Excel sheet which contains "Last downloaded from this course" before uploading.
+    </div>
+</div>
+
+<div class="box">
+    <b>Output Template</b>
+
+    <br><br>
+
+    <input type="file"
+           id="templateFile"
+           accept=".xlsx,.xls">
+
+    <div style="
+        margin-top:12px;
+        padding:8px;
+        background:#f5f5f5;
+        border-left:4px solid #999;
+        font-size:13px;
+        color:#555;
+        font-style:italic;
+    ">
+        Note: Upload any one IAPR template file downloaded from CAMU. Please manually mark 'Y'for absentees.
+    </div>
+</div>
+
+<button onclick="generateFiles()">Generate ZIP</button>
+
+<script>
+function cleanId(v){
+ if(v===undefined||v===null) return "";
+ return String(v).replace(".0","").trim();
+}
+
+function readFile(file){
+ return new Promise((resolve,reject)=>{
+  const r=new FileReader();
+  r.onload=e=>resolve(e.target.result);
+  r.onerror=reject;
+  r.readAsArrayBuffer(file);
+ });
+}
+
+async function generateFiles(){
+
+ const expFile=document.getElementById("expFile").files[0];
+ const vivaFile=document.getElementById("vivaFile").files[0];
+ const templateFile=document.getElementById("templateFile").files[0];
+
+ if(!expFile || !vivaFile || !templateFile){
+   alert("Upload all three files");
+   return;
+ }
+
+ const expWB=XLSX.read(await readFile(expFile));
+ const vivaWB=XLSX.read(await readFile(vivaFile));
+ const templateBuffer=await readFile(templateFile);
+
+ const expRows=XLSX.utils.sheet_to_json(
+   expWB.Sheets[expWB.SheetNames[0]],{header:1}
+ );
+
+ const vivaRows=XLSX.utils.sheet_to_json(
+   vivaWB.Sheets[vivaWB.SheetNames[0]],{header:1}
+ );
+
+ const expMap={};
+ for(let r=1;r<expRows.length;r++){
+   const row=expRows[r];
+   const id=cleanId(row[2]);
+   if(!id) continue;
+   expMap[id]=row;
+ }
+
+ const vivaMap={};
+ for(let r=1;r<vivaRows.length;r++){
+   const row=vivaRows[r];
+   const id=cleanId(row[2]);
+   if(!id) continue;
+   vivaMap[id]=row;
+ }
+
+ const experimentCols=[];
+ const headers=expRows[0];
+
+ for(let c=6;c<headers.length;c++){
+   if(headers[c]===undefined || String(headers[c]).trim()==="") break;
+   experimentCols.push(c);
+ }
+
+ const zip=new JSZip();
+
+ for(let expIndex=0; expIndex<experimentCols.length; expIndex++){
+
+   const expCol=experimentCols[expIndex];
+
+   const wb=XLSX.read(templateBuffer);
+   const sheet=wb.Sheets[wb.SheetNames[0]];
+   const rows=XLSX.utils.sheet_to_json(sheet,{header:1});
+
+const headerRow=rows[0];
+
+const stuRollCol=
+    headerRow.findIndex(
+        x=>String(x||"").trim()==="StuRollNo"
+    );
+
+const markCol=
+    headerRow.findIndex(
+        x=>String(x||"").trim()==="Mark"
+    );
+
+const markColumnLetter =
+    XLSX.utils.encode_col(markCol);
+
+   if(stuRollCol===-1 || markCol===-1){
+      alert("StuRollNo or Mark column not found");
+      return;
+   }
+
+   for(let r=2;r<rows.length;r++){ // row3 onwards
+      const row=rows[r];
+      const roll=cleanId(row[stuRollCol]);
+
+      if(!roll) break;
+
+      let expMark=0;
+      if(expMap[roll])
+      {
+         expMark=parseFloat(
+            expMap[roll][expCol]
+);
+
+if(isNaN(expMark))
+    expMark=0;
+      }
+
+      let finalMark = expMark;
+
+// For Experiments 1 to 20:
+// IAPR = 90% Experiment + 10% Viva
+if (expIndex < 20) {
+
+    let viva = 0;
+
+    if (vivaMap[roll]) {
+        viva = parseFloat(vivaMap[roll][6 + expIndex]);
+
+        if (isNaN(viva))
+            viva = 0;
+    }
+
+    finalMark = (expMark * 0.9) + (viva * 0.1);
+}
+
+// Experiment 20 and beyond:
+// Use experiment mark as-is
+else {
+    finalMark = expMark;
+}
+
+      const excelRow = r + 1;
+
+sheet[
+    markColumnLetter + excelRow
+] = {
+    t: "n",
+    v: Math.round(finalMark * 100) / 100
+};
+   }
+
+   const out=XLSX.write(wb,{type:"array",bookType:"xlsx"});
+
+   zip.file(
+     "IAPR_Exp"+String(expIndex+1).padStart(2,"0")+".xlsx",
+     out
+   );
+ }
+
+ const blob=await zip.generateAsync({type:"blob"});
+ const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download="IAPR_Files.zip";
+ a.click();
+
+ alert("Generated "+experimentCols.length+" files.");
+}
+</script>
+<footer style="
+    margin-top:50px;
+    display:flex;
+    justify-content:center;
+    gap:40px;
+    align-items:center;
+">
+
+    <img src="logo1.jpg" height="70">
+    <img src="logo2.png" height="70">
+    <img src="logo3.jpg" height="70">
+</footer>
+</body>
+</html>
+
+
+Rewrite this code such that all IAPRs are 90% of experiment marks and 10% of Viva marks. 
+No change in 10th experiment. And depending upon the number of experiments, That many files should be generated.
